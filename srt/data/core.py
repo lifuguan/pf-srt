@@ -27,18 +27,8 @@ def get_dataset(mode, cfg, max_len=None, full_scale=False):
         kwargs = dict()
 
     # Create dataset
-    if dataset_type == 'nmr':
-        dataset = data.NMRDataset(dataset_folder, mode, points_per_item=points_per_item,
-                                  max_len=max_len, full_scale=full_scale, **kwargs)
-    elif dataset_type == 'msn':
-        dataset = data.MultishapenetDataset(dataset_folder, mode, points_per_item=points_per_item,
-                                            full_scale=full_scale, **kwargs)
-    elif dataset_type == 'clevr3d':
-        dataset = data.Clevr3dDataset(dataset_folder, mode, points_per_item=points_per_item,
-                                      shapenet=False, max_len=max_len, full_scale=full_scale, **kwargs)
-    elif dataset_type == 'obsurf_msn':
-        dataset = data.Clevr3dDataset(dataset_folder, mode, points_per_item=points_per_item,
-                                      shapenet=True, max_len=max_len, full_scale=full_scale, **kwargs)
+    if dataset_type == 'kitti':
+        dataset = data.KittiDataset(num_context=1, num_trgt=cfg['vid_len']+1, val=False, low_res=(76,250),n_skip=cfg['n_skip'])
     else:
         raise ValueError('Invalid dataset "{}"'.format(cfg['dataset']))
 

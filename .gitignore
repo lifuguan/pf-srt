@@ -1,5 +1,6 @@
 *.pt
 .ipynb_checkpoints
-data
+dataset
 runs
 *__pycache__
+
