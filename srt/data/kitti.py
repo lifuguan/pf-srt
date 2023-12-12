@@ -8,14 +8,13 @@ import numpy as np
 from glob import glob
 from collections import defaultdict
 from pdb import set_trace as pdb
-from itertools import combinations
-from random import choice
-import matplotlib.pyplot as plt
+
+from srt.utils.nerf import get_camera_rays, get_extrinsic, transform_points
 
 from torchvision import transforms
 from einops import rearrange, repeat
 
-import sys
+import srt.geometry as geometry
 
 # Geometry functions below used for calculating depth, ignore
 def glob_imgs(path):
@@ -180,6 +179,7 @@ class SceneInstanceDataset(torch.utils.data.Dataset):
         h, w = rgb.shape[-2:]
 
         K = torch.stack((K[0] / w, K[1] / h, K[2])) #normalize intrinsics to be resolution independent
+        # K = torch.stack((K[0] / 250, K[1] / 76, K[2])) #normalize intrinsics to be resolution independent
 
         scale = 2; 
         lowh, loww = int(64 * scale), int(208 * scale)
@@ -453,26 +453,45 @@ class KittiDataset(torch.utils.data.Dataset):
         out_dict = {"query": trgt, "post_input": post_input, "context": None}, trgt
 
         imgs = trgt["rgb"]
+        h, w = imgs.shape[-2:]
         imgs_large = (trgt["large_rgb"]*.5+.5)*255
         imgs_med = (trgt["large_rgb"]*.5+.5)*255
         Ks = trgt["intrinsics"][:,:3,:3]
         uv = trgt["uv"].flatten(1,2)
 
+        xmap = np.linspace(-1, 1, w)
+        ymap = np.linspace(-1, 1, h)
+        xmap, ymap = np.meshgrid(xmap, ymap)
+        
+        # rays = []
+        # for i in range(imgs.shape[0]):
+        #     cur_rays = np.stack((xmap, ymap, np.ones_like(xmap)), -1)
+        #     cur_rays = transform_points(cur_rays, trgt["cam2world"][i] @ Ks[i], translate=False)
+        #     cur_rays = cur_rays[..., :3]
+        #     cur_rays = cur_rays / np.linalg.norm(cur_rays, axis=-1, keepdims=True)
+        #     rays.append(cur_rays)
+        # rays = np.stack(rays, axis=0).astype(np.float32)
+
+
+        camera_pos, rays = geometry.get_world_rays(uv, Ks, trgt["cam2world"])
+        input_camera_pos, input_rays = camera_pos[:-1], rays[:-1]
+        target_camera_pos, target_rays = camera_pos[2:], rays[2:]
+
         #imgs large in [0,255],
         #imgs in [-1,1],
         #gt_rgb in [0,1],
         model_data = {
-                "target_images": imgs[1:],
-                "input_images": imgs[:-1],
-                "target_images_large": imgs_large[1:],
+                "input_images": imgs[:-1],                                                  # num_views, h, w, 3
+                "input_camera_pos" : input_camera_pos[:,0,:],                               # num_views, 3
+                "input_rays": input_rays.reshape(input_rays.shape[0],h, w, 3),              # num_views, h, w, 3
+                "target_images": imgs[2:],                                                  # num_views, h, w, 3
+                "target_pixels": imgs[2:].reshape(imgs[2:].shape[0],3,-1).permute(0,2,1),   # num_views, p, 3
+                "target_camera_pos": target_camera_pos,                                     # num_views, p, 3
+                "target_rays": target_rays,                                                 # num_views, p, 3
+                "target_images_large": imgs_large[2:],
                 "input_images_large": imgs_large[:-1],
-                "target_images_med": imgs_med[1:],
-                "input_images_med": imgs_med[:-1],
-                "intrinsics": Ks[1:],
-                "x_pix": uv[1:],
-                "target_camera_pos": trgt["cam2world"][1:],
-                "input_camera_pos": trgt["cam2world"][:-1],
-                "target_rgb": ch_sec(imgs[1:])*.5+.5,
+                "target_rgb": ch_sec(imgs[2:])*.5+.5,
                 "input_rgb": ch_sec(imgs[:-1])*.5+.5,
                 }
+
         return model_data

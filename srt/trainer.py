@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from tqdm import tqdm
-
+import piqa
 import srt.utils.visualize as vis
 from srt.utils.common import mse2psnr, reduce_dict, gather_all
 from srt.utils import nerf
@@ -34,19 +34,14 @@ class SRTTrainer:
         eval_lists = defaultdict(list)
 
         loader = val_loader if get_rank() > 0 else tqdm(val_loader)
-        sceneids = []
 
         for data in loader:
-            sceneids.append(data['sceneid'])
             eval_step_dict = self.eval_step(data, **kwargs)
 
             for k, v in eval_step_dict.items():
                 eval_lists[k].append(v)
 
-        sceneids = torch.cat(sceneids, 0).cuda()
-        sceneids = torch.cat(gather_all(sceneids), 0)
-
-        print(f'Evaluated {len(torch.unique(sceneids))} unique scenes.')
+        print(f'Evaluated scenes.')
 
         eval_dict = {k: torch.cat(v, 0) for k, v in eval_lists.items()}
         eval_dict = reduce_dict(eval_dict, average=True)  # Average across processes
@@ -59,7 +54,7 @@ class SRTTrainer:
         self.model.train()
         self.optimizer.zero_grad()
         loss, loss_terms = self.compute_loss(data, it)
-        loss = loss.mean(0)
+        loss = loss.mean()
         loss_terms = {k: v.mean(0).item() for k, v in loss_terms.items()}
         loss.backward()
         self.optimizer.step()
@@ -75,20 +70,28 @@ class SRTTrainer:
 
         z = self.model.encoder(input_images, input_camera_pos, input_rays)
 
-        target_camera_pos = data.get('target_camera_pos').to(device)
-        target_rays = data.get('target_rays').to(device)
-
-        loss = 0.
+        loss, psnr = 0., 0.
         loss_terms = dict()
 
-        pred_pixels, extras = self.model.decoder(z, target_camera_pos, target_rays, **self.render_kwargs)
+        pts2img = lambda x: x.reshape(-1,76,250,3).permute(0,3,1,2).clip(0,1).contiguous()
 
-        loss = loss + ((pred_pixels - target_pixels)**2).mean((1, 2))
-        loss_terms['mse'] = loss
-        if 'coarse_img' in extras:
-            coarse_loss = ((extras['coarse_img'] - target_pixels)**2).mean((1, 2))
-            loss_terms['coarse_mse'] = coarse_loss
-            loss = loss + coarse_loss
+        # target_camera_pos = data.get('target_camera_pos').to(device)
+        # target_rays = data.get('target_rays').to(device)
+        # for b_z, b_target_camera_pos, b_target_rays, b_target_pixels in zip(z, target_camera_pos, target_rays, target_pixels):
+        #     b_pred_pixels, b_extras = self.model.decoder(b_z.unsqueeze(0), b_target_camera_pos, \
+        #                                              b_target_rays, **self.render_kwargs)
+        #     loss = loss + ((b_pred_pixels - b_target_pixels)**2).mean((1, 2)).mean(0)
+        #     psnr = psnr + piqa.PSNR()(pts2img(b_pred_pixels), pts2img(b_target_pixels))
+        # loss_terms['mse'], loss_terms['psnr'] = loss, psnr
+
+        b_target_camera_pos = data.get('target_camera_pos').to(device).permute(1,0,2,3)
+        b_target_rays = data.get('target_rays').to(device).permute(1,0,2,3)
+        for i in range(target_pixels.shape[1]):
+            b_pred_pixels, b_extras = self.model.decoder(z, b_target_camera_pos[i], \
+                                                     b_target_rays[i], **self.render_kwargs)
+            loss = loss + ((b_pred_pixels - target_pixels[:,i,:,:])**2).mean((1, 2))
+            psnr = psnr + piqa.PSNR()(pts2img(b_pred_pixels), pts2img(target_pixels[:,i,:,:]))
+        loss_terms['mse'], loss_terms['psnr'] = loss / target_pixels.shape[1], psnr / target_pixels.shape[1]
 
         return loss, loss_terms
 

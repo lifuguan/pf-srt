@@ -1,5 +1,7 @@
 *.pt
 .ipynb_checkpoints
 dataset
+model_zoo
 *__pycache__
-
+wandb
+*.png

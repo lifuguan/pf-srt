@@ -103,14 +103,6 @@ class Clevr3dDataset(Dataset):
 
         input_camera_pos = all_camera_pos[view_idx]
 
-        if self.canonical:
-            track_point = np.zeros_like(input_camera_pos)  # All cameras are pointed at the origin
-            canonical_extrinsic = get_extrinsic(input_camera_pos, track_point=track_point)
-            canonical_extrinsic = canonical_extrinsic.astype(np.float32)
-            all_rays = transform_points(all_rays, canonical_extrinsic, translate=False)
-            all_camera_pos = transform_points(all_camera_pos, canonical_extrinsic)
-            input_camera_pos = all_camera_pos[view_idx]
-
         input_rays = all_rays[view_idx]
         input_rays = downsample(input_rays, num_steps=self.downsample)
         input_rays = np.expand_dims(input_rays, 0)

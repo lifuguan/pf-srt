@@ -25,10 +25,12 @@ def get_dataset(mode, cfg, max_len=None, full_scale=False):
         kwargs = cfg['kwargs']
     else:
         kwargs = dict()
+    
+    val = False if mode == 'train' else True
 
     # Create dataset
     if dataset_type == 'kitti':
-        dataset = data.KittiDataset(num_context=1, num_trgt=cfg['vid_len']+1, val=False, low_res=(76,250),n_skip=cfg['n_skip'])
+        dataset = data.KittiDataset(num_context=1, num_trgt=cfg['vid_len']+1, val=val, low_res=(76,250),n_skip=cfg['n_skip'])
     else:
         raise ValueError('Invalid dataset "{}"'.format(cfg['dataset']))
 

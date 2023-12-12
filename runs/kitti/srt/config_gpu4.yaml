@@ -13,12 +13,12 @@ model:
 
 training:
   num_workers: 12
-  batch_size: 1
+  batch_size: 8
   model_selection_metric: psnr
   model_selection_mode: maximize
   print_every: 10
   visualize_every: 5000
-  validate_every: 5000
+  validate_every: 50000
   checkpoint_every: 1000
   backup_every: 100000
   max_it: 4000000

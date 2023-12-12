@@ -45,6 +45,7 @@ if __name__ == '__main__':
     parser.add_argument('--full-scale', action='store_true', help='Evaluate on full images.')
     parser.add_argument('--print-model', action='store_true', help='Print model and parameters on startup.')
     parser.add_argument('--rtpt', type=str, help='Use rtpt to set process name with given initials.')
+    parser.add_argument('--load_pretrain', type=str, default="", help='Print model and parameters on startup.')
 
     args = parser.parse_args()
     with open(args.config, 'r') as f:
@@ -111,7 +112,7 @@ if __name__ == '__main__':
         worker_init_fn=data.worker_init_fn, persistent_workers=True)
 
     val_loader = torch.utils.data.DataLoader(
-        eval_dataset, batch_size=max(1, batch_size // 8), num_workers=1, 
+        eval_dataset, batch_size=max(1, batch_size // 4), num_workers=1, 
         sampler=val_sampler, shuffle=shuffle,
         pin_memory=False, worker_init_fn=data.worker_init_fn, persistent_workers=True)
 
@@ -156,20 +157,27 @@ if __name__ == '__main__':
                             decoder=decoder_module, optimizer=optimizer)
 
     # Try to automatically resume
-    try:
-        if os.path.exists(os.path.join(out_dir, f'model_{max_it}.pt')):
-            load_dict = checkpoint.load(f'model_{max_it}.pt')
-        else:
-            load_dict = checkpoint.load('model.pt')
-    except FileNotFoundError:
-        load_dict = dict()
-
-    epoch_it = load_dict.get('epoch_it', -1)
-    it = load_dict.get('it', -1)
-    time_elapsed = load_dict.get('t', 0.)
-    run_id = load_dict.get('run_id', None)
-    metric_val_best = load_dict.get(
-        'loss_val_best', -model_selection_sign * np.inf)
+    epoch_it = 0
+    it = 0
+    time_elapsed = 0
+    run_id = 0
+    metric_val_best = 0
+    if args.load_pretrain != "":
+        load_dict = checkpoint.load(args.load_pretrain)
+    else:
+        try:
+            if os.path.exists(os.path.join(out_dir, f'model_{max_it}.pt')):
+                load_dict = checkpoint.load(f'model_{max_it}.pt')
+                epoch_it = load_dict.get('epoch_it', -1)
+                it = load_dict.get('it', -1)
+                time_elapsed = load_dict.get('t', 0.)
+                run_id = load_dict.get('run_id', None)
+                metric_val_best = load_dict.get(
+                    'loss_val_best', -model_selection_sign * np.inf)
+            else:
+                load_dict = checkpoint.load('model.pt')
+        except FileNotFoundError:
+            load_dict = dict()
 
     print(f'Current best validation metric ({model_selection_metric}): {metric_val_best:.8f}.')
 
@@ -180,8 +188,7 @@ if __name__ == '__main__':
             print(f'Sampled new wandb run_id {run_id}.')
         else:
             print(f'Resuming wandb with existing run_id {run_id}.')
-        wandb.init(project='srt', name=os.path.dirname(args.config),
-                   id=run_id, resume=True)
+        wandb.init(entity="vio-research",project='nerf-odometry', name=os.path.dirname(args.config), resume=False)
         wandb.config = cfg
 
     if args.print_model:

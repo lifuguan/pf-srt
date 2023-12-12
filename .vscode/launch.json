@@ -5,13 +5,34 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "env": {"CUDA_VISIBLE_DEVICES":"7"},
             "name": "train:kitti",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/train.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            "args": ["runs/kitti/srt/config.yaml", "--load_pretrain", "msn_pretrained.pt"]
+        },
+        {
+            // "env": {"CUDA_VISIBLE_DEVICES":"4,5,6,7"},
+            "name": "train:kitti-gpu4",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
             "args": ["runs/kitti/srt/config.yaml"]
-        }
+        },
+        {
+            "env": {"CUDA_VISIBLE_DEVICES":"7"},
+            "name": "test:kitti",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["runs/kitti/srt/config.yaml"]
+        },
     ]
 }
